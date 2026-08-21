@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""LTX-2.3 agent loop that matches the upstream raw-text tokenizer path."""
+"""MiniMax H3 agent loop for raw-text tokenization."""
 
 from typing import Any
 
@@ -21,12 +21,12 @@ from verl.utils.ray_utils import get_event_loop
 from verl.utils.tokenizer import normalize_token_ids
 
 from verl_omni.agent_loop.single_turn_agent_loop import DiffusionSingleTurnAgentLoop
-from verl_omni.agent_loop.utils import messages_to_text as _messages_to_text
+from verl_omni.agent_loop.utils import messages_to_text
 
 
-@register("ltx2_diffusion_single_turn_agent")
-class LTX2DiffusionSingleTurnAgentLoop(DiffusionSingleTurnAgentLoop):
-    """Tokenize raw LTX prompts exactly as ``LTX2Pipeline.encode_prompt`` does."""
+@register("minimax_h3_diffusion_single_turn_agent")
+class MiniMaxH3DiffusionSingleTurnAgentLoop(DiffusionSingleTurnAgentLoop):
+    """Tokenize H3 prompts without applying a chat template."""
 
     def __init__(
         self,
@@ -39,10 +39,8 @@ class LTX2DiffusionSingleTurnAgentLoop(DiffusionSingleTurnAgentLoop):
         extra_tokenizer_map: dict[str, dict[str, Any]] | None = None,
         **kwargs,
     ) -> None:
-        # LTX-2 uses its text encoder tokenizer as a raw-text tokenizer. Calling
-        # AgentLoopBase.__init__ would probe its optional chat template with two
-        # consecutive user messages, which strict templates reject before the
-        # LTX-specific raw-text path gets a chance to run.
+        # H3 uses its text encoder tokenizer directly. Avoid probing an optional
+        # chat template before the model-specific raw-text path runs.
         del kwargs
         self.config = trainer_config.config
         self.rollout_config = self.config.actor_rollout_ref.rollout
@@ -57,29 +55,13 @@ class LTX2DiffusionSingleTurnAgentLoop(DiffusionSingleTurnAgentLoop):
         self.system_prompt = []
         self.loop = get_event_loop()
 
-    async def ct_build_initial_tokens(
-        self,
-        messages: list[dict],
-        tools: list[dict] | None = None,
-        images: list[Any] | None = None,
-        videos: list[Any] | None = None,
-        audios: list[Any] | None = None,
-    ) -> list[int]:
-        """Encode raw text with special tokens and right-side truncation."""
-        del tools, images, videos, audios
-        text = _messages_to_text(messages)
-        prompt_length = self.rollout_config.prompt_length
-        tokenized = await self.loop.run_in_executor(
-            None,
-            lambda: self.tokenizer(
-                text,
-                padding=False,
-                truncation=True,
-                max_length=prompt_length,
-                add_special_tokens=True,
-            )["input_ids"],
-        )
-        return normalize_token_ids(tokenized)
+    async def run(self, sampling_params: dict[str, Any], **kwargs):
+        sampling_params = {
+            **sampling_params,
+            "aspect_ratio": "16:9",
+            "verl_raw_prompt": messages_to_text(kwargs["raw_prompt"]),
+        }
+        return await super().run(sampling_params, **kwargs)
 
     async def apply_chat_template(
         self,
@@ -91,6 +73,18 @@ class LTX2DiffusionSingleTurnAgentLoop(DiffusionSingleTurnAgentLoop):
         mm_processor_kwargs: dict[str, Any] | None = None,
         remove_system_prompt: bool = False,
     ) -> list[int]:
-        """Encode raw text with special tokens and right-side truncation."""
-        del mm_processor_kwargs, remove_system_prompt
-        return await self.ct_build_initial_tokens(messages, tools=tools, images=images, videos=videos, audios=audios)
+        """Match H3's raw T2VA presentation with no special tokens."""
+        del tools, images, videos, audios, mm_processor_kwargs, remove_system_prompt
+        text = messages_to_text(messages)
+        prompt_length = self.rollout_config.prompt_length
+        tokenized = await self.loop.run_in_executor(
+            None,
+            lambda: self.tokenizer(
+                text,
+                padding=False,
+                truncation=True,
+                max_length=prompt_length,
+                add_special_tokens=False,
+            )["input_ids"],
+        )
+        return normalize_token_ids(tokenized)
