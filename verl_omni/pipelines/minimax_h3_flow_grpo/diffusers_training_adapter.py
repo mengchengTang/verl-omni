@@ -63,8 +63,9 @@ def _shared_layout(value: torch.Tensor, length: int, name: str) -> torch.Tensor:
 class MiniMaxH3FlowGRPO(DiffusionModelBase):
     """Replay flattened joint video/audio transitions with the H3 DiT."""
 
-    @staticmethod
-    def _validate_lora_targets(model_config: DiffusionModelConfig) -> None:
+    @classmethod
+    def validate_lora_config(cls, model_config: DiffusionModelConfig) -> None:
+        """Reject LoRA targets that the rollout weight sync cannot transport."""
         if model_config.lora_rank <= 0:
             return
 
@@ -84,8 +85,6 @@ class MiniMaxH3FlowGRPO(DiffusionModelBase):
 
     @classmethod
     def build_scheduler(cls, model_config: DiffusionModelConfig) -> H3SchedulerPair:
-        # The engine bypasses configure_trainable_params for LoRA runs.
-        cls._validate_lora_targets(model_config)
         # H3 uses different sigma schedules for video and audio latents.
         schedulers = (FlowMatchSDEDiscreteScheduler(), FlowMatchSDEDiscreteScheduler())
         cls.set_timesteps(schedulers, model_config, get_device_name())
@@ -231,7 +230,7 @@ class MiniMaxH3FlowGRPO(DiffusionModelBase):
         video_weight = video[0].numel()
         audio_weight = audio[0].numel()
         total_weight = video_weight + audio_weight
-        log_prob = combine_log_probs(video_log_prob, audio_log_prob, video_weight, audio_weight)
+        log_prob = combine_log_probs(video_log_prob, audio_log_prob)
         mean = flatten_joint_latents(video_out[2], audio_out[2])
         video_std = video_out[3].reshape(-1).mean()
         audio_std = audio_out[3].reshape(-1).mean()
