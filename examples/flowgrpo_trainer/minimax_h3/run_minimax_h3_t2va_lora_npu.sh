@@ -15,7 +15,7 @@ DATA_DIR=${DATA_DIR:-$WORKSPACE/data/vid_prompt/verl_omni}
 CLAP_MODEL_PATH=${CLAP_MODEL_PATH:-laion/larger_clap_general}
 IMAGEBIND_MODEL_PATH=${IMAGEBIND_MODEL_PATH:-.checkpoints/imagebind_huge.pth}
 ACTOR_CONFIG_PATH=${ACTOR_CONFIG_PATH:-$(dirname "$MODEL_PATH")/transformer}
-NUM_GPUS=${NUM_GPUS:-8}
+NUM_GPUS=${NUM_GPUS:-16}
 ROLLOUT_TP=${ROLLOUT_TP:-4}
 TEXT_ENCODER_TP=${TEXT_ENCODER_TP:-$ROLLOUT_TP}
 REWARD_DEVICE=${REWARD_DEVICE:-npu}
@@ -84,7 +84,6 @@ python3 -m verl_omni.trainer.main_diffusion \
     actor_rollout_ref.rollout.max_num_seqs=1 \
     actor_rollout_ref.rollout.layered_summon=True \
     +actor_rollout_ref.rollout.engine_kwargs.vllm_omni.text_encoder_tp_size=$TEXT_ENCODER_TP \
-    +actor_rollout_ref.rollout.engine_kwargs.vllm_omni.enable_cpu_offload=True \
     actor_rollout_ref.rollout.n=8 \
     actor_rollout_ref.rollout.seed=42 \
     actor_rollout_ref.rollout.agent.num_workers=$((NUM_GPUS / ROLLOUT_TP)) \

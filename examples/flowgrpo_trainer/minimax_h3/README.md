@@ -96,11 +96,13 @@ This writes `$DATA_DIR/train.parquet` and `$DATA_DIR/test.parquet`, the paths
 consumed by both launchers. Use `--train_size` or `--val_size` to create a
 smaller debugging dataset.
 
-## Prepare the rewards
+## Install reward dependencies
 
-CLAP uses the existing `transformers` and `torchaudio` dependencies. The
-default CLAP checkpoint is downloaded from `laion/larger_clap_general` unless
-`CLAP_MODEL_PATH` points to a local copy.
+The provided launchers enable both CLAP and ImageBind rewards. Install their
+dependencies before training. CLAP uses `transformers` and `torchaudio`, which
+are included in the standard training environment. Its default checkpoint is
+downloaded from `laion/larger_clap_general` unless `CLAP_MODEL_PATH` points to
+a local copy.
 
 ImageBind is distributed separately under the CC-BY-NC-SA 4.0 non-commercial
 license. Install it and its video dependency separately:
@@ -151,9 +153,9 @@ IMAGEBIND_MODEL_PATH=/path/to/imagebind_huge.pth \
 bash examples/flowgrpo_trainer/minimax_h3/run_minimax_h3_t2va_lora_npu.sh
 ```
 
-The NPU launcher uses Actor `_native_npu`, rollout `TORCH_SDPA`, parameter and
-optimizer offload, and vLLM-Omni CPU offload. It sources the Ascend toolkit and
-ATB environments from `ASCEND_HOME_PATH`, which defaults to
+The NPU launcher uses Actor `_native_npu`, rollout `TORCH_SDPA`, and Actor
+parameter and optimizer offload. It sources the Ascend toolkit and ATB
+environments from `ASCEND_HOME_PATH`, which defaults to
 `/usr/local/Ascend/ascend-toolkit`.
 
 Both launchers default to offline W&B logging. Set `WANDB_MODE=online` and the
@@ -164,8 +166,8 @@ usual W&B credentials to upload a run. Checkpoints and logs are written under
 
 | Setting | Default |
 | --- | --- |
-| Devices | 8 GPU or NPU |
-| Rollout DiT TP | 4 |
+| Devices | 8 GPU / 16 NPU |
+| Rollout DiT TP | 2 GPU / 4 NPU |
 | Text-encoder TP | Same as rollout TP |
 | Training batch size | 32 |
 | PPO mini-batch / per-device micro-batch | 16 / 1 |
@@ -185,7 +187,7 @@ valid only when every sample has the same packed layout.
 
 MiniMax H3 requires a named `ASPECT_RATIO`, one of `21:9`, `16:9`, `4:3`,
 `1:1`, `3:4`, or `9:16`. The explicit height and width select the generated
-canvas and must be multiples of 32; the default is `256x448` with
+canvas and must be multiples of 32; the provided launchers use `256x448` with
 `ASPECT_RATIO=16:9`.
 
 Common environment overrides are:

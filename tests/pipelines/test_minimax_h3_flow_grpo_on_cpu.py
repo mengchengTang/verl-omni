@@ -87,11 +87,13 @@ def test_minimax_h3_flow_grpo_registers_both_adapters_and_joint_helpers() -> Non
 def test_rollout_output_reaches_actor_and_replays_joint_transition(monkeypatch) -> None:
     trajectory = _trajectory()
     pipeline = object.__new__(MiniMaxH3PipelineWithLogProb)
+    pipeline.tokenizer = MagicMock()
+    pipeline.tokenizer.decode.return_value = "a bounded piano performance"
     pipeline._flow_grpo_trajectory = trajectory
     request = SimpleNamespace(
         prompt={"prompt_token_ids": [1, 2]},
         sampling_params=SimpleNamespace(
-            extra_args={"raw_prompt": "a piano performance"},
+            extra_args={},
             max_sequence_length=2,
             num_outputs_per_prompt=1,
         ),
@@ -107,8 +109,8 @@ def test_rollout_output_reaches_actor_and_replays_joint_transition(monkeypatch) 
     ):
         rollout_output = pipeline.forward(request_batch)
 
-    assert request.prompt["prompt"] == "a piano performance"
-    assert "raw_prompt" not in request.sampling_params.extra_args
+    pipeline.tokenizer.decode.assert_called_once_with([1, 2], skip_special_tokens=False)
+    assert request.prompt["prompt"] == "a bounded piano performance"
     torch.testing.assert_close(rollout_output.trajectory_latents, trajectory["all_latents"])
     metadata = rollout_output.output["metadata"]
     assert set(metadata["prompt_embeddings"]) == {"prompt_embeds", "prompt_embeds_mask"}

@@ -65,7 +65,7 @@ class MiniMaxH3PipelineWithLogProb(MiniMaxH3WeightSyncMixin, MiniMaxH3Pipeline):
         - ``__init__`` adds request-scoped FlowGRPO and CPS state.
         - ``diffuse`` replaces the standard denoise loop with CPS sampling and records joint video/audio transitions,
           log probabilities, and Actor replay metadata.
-        - ``forward`` restores the raw prompt, configures FlowGRPO, and attaches the trajectory to ``DiffusionOutput``.
+        - ``forward`` restores the prompt text, configures FlowGRPO, and attaches the trajectory to ``DiffusionOutput``.
 
     Prompt encoding, including text-encoder TP, is handled by the upstream H3 pipeline.
     """
@@ -99,16 +99,24 @@ class MiniMaxH3PipelineWithLogProb(MiniMaxH3WeightSyncMixin, MiniMaxH3Pipeline):
         self._flow_grpo_seed = int(extra_args.get("sde_window_seed", 42)) + max(global_step - 1, 0)
         self._h3_max_text_len = int(request.sampling_params.max_sequence_length or 1024)
 
-    @staticmethod
-    def _inject_raw_prompt(request: OmniDiffusionRequest) -> None:
-        extra_args = request.sampling_params.extra_args or {}
-        raw_prompt = extra_args.pop("raw_prompt", None)
-        if not isinstance(raw_prompt, str) or not raw_prompt:
-            raise ValueError("MiniMax H3 rollout requires a non-empty raw prompt.")
-        if isinstance(request.prompt, dict):
-            request.prompt = {**request.prompt, "prompt": raw_prompt}
-        else:
-            request.prompt = raw_prompt
+    def _inject_prompt_text(self, request: OmniDiffusionRequest) -> None:
+        # TODO: Let upstream H3 consume prompt token IDs directly. Its text
+        # encoder uses tensor parallelism, and overriding encode_prompt would
+        # duplicate substantial encoding and distributed-communication logic.
+        # For now, decode the truncated IDs back to text and reuse upstream.
+        if not isinstance(request.prompt, dict):
+            raise TypeError("MiniMax H3 rollout expects a dict prompt containing `prompt_token_ids`.")
+        token_ids = request.prompt.get("prompt_token_ids")
+        if isinstance(token_ids, torch.Tensor):
+            token_ids = token_ids.detach().cpu().reshape(-1).tolist()
+        elif token_ids and isinstance(token_ids[0], list):
+            token_ids = token_ids[0]
+        if not token_ids:
+            raise ValueError("MiniMax H3 rollout requires non-empty `prompt_token_ids`.")
+        prompt = self.tokenizer.decode(token_ids, skip_special_tokens=False)
+        if not prompt:
+            raise ValueError("MiniMax H3 tokenizer decoded an empty prompt.")
+        request.prompt = {**request.prompt, "prompt": prompt}
 
     def _layout_outputs(
         self,
@@ -352,7 +360,7 @@ class MiniMaxH3PipelineWithLogProb(MiniMaxH3WeightSyncMixin, MiniMaxH3Pipeline):
         if len(request.requests) != 1:
             raise ValueError(f"MiniMax H3 FlowGRPO expects one request, got {len(request.requests)}.")
         req = request.requests[0]
-        self._inject_raw_prompt(req)
+        self._inject_prompt_text(req)
         self._configure_flow_grpo(req)
         output = super().forward(request)
         trajectory = {
