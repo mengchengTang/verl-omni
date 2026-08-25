@@ -39,8 +39,8 @@ class MiniMaxH3DiffusionSingleTurnAgentLoop(DiffusionSingleTurnAgentLoop):
         extra_tokenizer_map: dict[str, dict[str, Any]] | None = None,
         **kwargs,
     ) -> None:
-        # H3 uses its text encoder tokenizer directly. Avoid probing an optional
-        # chat template before the model-specific raw-text path runs.
+        # H3 consumes raw text token IDs and never applies a chat template,
+        # so avoid the parent initializer's chat-template probe.
         del kwargs
         self.config = trainer_config.config
         self.rollout_config = self.config.actor_rollout_ref.rollout

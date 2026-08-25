@@ -96,13 +96,13 @@ python3 -m verl_omni.trainer.main_diffusion \
     actor_rollout_ref.rollout.pipeline.aspect_ratio=$ASPECT_RATIO \
     actor_rollout_ref.rollout.pipeline.num_frames=107 \
     actor_rollout_ref.rollout.pipeline.frame_rate=24 \
-    actor_rollout_ref.rollout.pipeline.num_inference_steps=50 \
+    actor_rollout_ref.rollout.pipeline.num_inference_steps=24 \
     actor_rollout_ref.rollout.pipeline.max_sequence_length=1024 \
     +actor_rollout_ref.rollout.pipeline.output_type=np \
     +actor_rollout_ref.rollout.val_kwargs.pipeline.output_type=np \
     actor_rollout_ref.rollout.algo.noise_level=0.8 \
     actor_rollout_ref.rollout.algo.sde_type=cps \
-    actor_rollout_ref.rollout.algo.sde_window_range='[0,50]' \
+    actor_rollout_ref.rollout.algo.sde_window_range='[0,24]' \
     actor_rollout_ref.rollout.algo.sde_window_size=3 \
     actor_rollout_ref.rollout.algo.sde_contiguous=True \
     actor_rollout_ref.rollout.algo.sde_window_seed=42 \
