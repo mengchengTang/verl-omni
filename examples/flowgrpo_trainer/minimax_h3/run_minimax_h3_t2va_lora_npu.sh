@@ -130,7 +130,16 @@ python3 -m verl_omni.trainer.main_diffusion \
     trainer.project_name=flow_grpo_npu \
     trainer.experiment_name=minimax_h3_t2va_lora_npu \
     trainer.default_local_dir=$checkpoint_dir \
-    trainer.resume_mode=disable \
+    trainer.validation_data_dir=$output_dir/validation_data \
+    trainer.rollout_data_dir=$output_dir/rollout_data \
+    trainer.rollout_data_save_freq=10 \
+    trainer.log_val_generations=8 \
+    trainer.video_fps=24 \
+    trainer.val_before_train=True \
     trainer.n_gpus_per_node=$NUM_GPUS \
     trainer.nnodes=1 \
+    trainer.save_freq=10 \
+    trainer.max_actor_ckpt_to_keep=1 \
+    trainer.test_freq=10 \
+    trainer.total_epochs=15 \
     trainer.total_training_steps=$TOTAL_TRAINING_STEPS "$@"
