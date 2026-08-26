@@ -2,7 +2,7 @@
 # MiniMax H3 T2VA LoRA FlowGRPO with CLAP and ImageBind rewards.
 set -x
 
-export WANDB_MODE=${WANDB_MODE:-offline}
+export WANDB_MODE=${WANDB_MODE:-online}
 
 WORKSPACE=${WORKSPACE:-$HOME}
 MODEL_PATH=${MODEL_PATH:-$WORKSPACE/models/MiniMax-H3/FL2VA}

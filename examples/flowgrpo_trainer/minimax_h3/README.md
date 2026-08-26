@@ -158,8 +158,8 @@ parameter and optimizer offload. It sources the Ascend toolkit and ATB
 environments from `ASCEND_HOME_PATH`, which defaults to
 `/usr/local/Ascend/ascend-toolkit`.
 
-Both launchers default to offline W&B logging. Set `WANDB_MODE=online` and the
-usual W&B credentials to upload a run. Checkpoints and logs are written under
+Both launchers default to online W&B logging. Set `WANDB_MODE=offline` to keep
+metrics local. Checkpoints and logs are written under
 `outputs/<launcher-name>/` unless `OUTPUT_DIR` is set.
 
 ## Default configuration

@@ -2,7 +2,7 @@
 # MiniMax H3 T2VA LoRA FlowGRPO with CLAP and ImageBind rewards (Ascend NPU).
 set -x
 
-export WANDB_MODE=${WANDB_MODE:-offline}
+export WANDB_MODE=${WANDB_MODE:-online}
 export VERL_DATAPROTO_SERIALIZATION_METHOD=numpy
 ASCEND_HOME_PATH=${ASCEND_HOME_PATH:-/usr/local/Ascend/ascend-toolkit}
 
