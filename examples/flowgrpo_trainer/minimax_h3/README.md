@@ -174,9 +174,10 @@ metrics local. Checkpoints and logs are written under
 | Rollouts per prompt | 8 |
 | LoRA rank / alpha | 64 / 128 |
 | Learning rate | `3e-4` |
-| Output | `256x448`, 107 frames at 24 FPS |
-| Rollout inference steps | 50 |
-| CPS window | 3 contiguous transitions from `[0, 50]` |
+| Training output | `256x384`, 121 frames at 24 FPS |
+| Validation output | `512x768`, 121 frames at 24 FPS, 40 inference steps |
+| Rollout inference steps | 10 |
+| CPS window | 3 contiguous transitions from `[0, 8)` |
 | Total training steps | 100 |
 
 `NUM_GPUS` must be divisible by `ROLLOUT_TP`. `TEXT_ENCODER_TP` cannot exceed
@@ -187,7 +188,7 @@ valid only when every sample has the same packed layout.
 
 MiniMax H3 requires a named `ASPECT_RATIO`, one of `21:9`, `16:9`, `4:3`,
 `1:1`, `3:4`, or `9:16`. The explicit height and width select the generated
-canvas and must be multiples of 32; the provided launchers use `256x448` with
+canvas and must be multiples of 32; the provided launchers use `256x384` with
 `ASPECT_RATIO=16:9`.
 
 Common environment overrides are:
@@ -207,6 +208,12 @@ Common environment overrides are:
 | `CLAP_MODEL_PATH` | CLAP model ID or local path |
 | `IMAGEBIND_MODEL_PATH` | Local ImageBind checkpoint path |
 | `ASPECT_RATIO` | Named H3 canvas ratio |
+| `HEIGHT` | Training output height |
+| `WIDTH` | Training output width |
+| `NUM_FRAMES` | Training and validation frame count |
+| `INFER_STEPS` | Training rollout inference steps |
+| `VAL_HEIGHT` | Validation output height |
+| `VAL_WIDTH` | Validation output width |
 | `TOTAL_TRAINING_STEPS` | Number of trainer steps |
 
 Extra Hydra overrides may be appended to either launcher command.
