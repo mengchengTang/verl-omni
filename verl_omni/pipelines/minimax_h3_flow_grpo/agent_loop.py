@@ -17,7 +17,6 @@
 from typing import Any
 
 from verl.experimental.agent_loop.agent_loop import register
-from verl.utils.ray_utils import get_event_loop
 from verl.utils.tokenizer import normalize_token_ids
 
 from verl_omni.agent_loop.single_turn_agent_loop import DiffusionSingleTurnAgentLoop
@@ -28,45 +27,16 @@ from verl_omni.agent_loop.utils import messages_to_text
 class MiniMaxH3DiffusionSingleTurnAgentLoop(DiffusionSingleTurnAgentLoop):
     """Tokenize H3 prompts without applying a chat template."""
 
-    def __init__(
-        self,
-        trainer_config,
-        server_manager,
-        tokenizer,
-        processor,
-        dataset_cls,
-        data_config,
-        extra_tokenizer_map: dict[str, dict[str, Any]] | None = None,
-        **kwargs,
-    ) -> None:
-        # H3 consumes raw text token IDs and never applies a chat template,
-        # so avoid the parent initializer's chat-template probe.
-        del kwargs
-        self.config = trainer_config.config
-        self.rollout_config = self.config.actor_rollout_ref.rollout
-        self.server_manager = server_manager
-        self.tokenizer = tokenizer
-        self.processor = processor
-        self.dataset_cls = dataset_cls
-        self.data_config = data_config.config
-        self.apply_chat_template_kwargs = self.data_config.get("apply_chat_template_kwargs", {})
-        self.mm_processor_kwargs = self.data_config.get("mm_processor_kwargs", {})
-        self.extra_tokenizer_map = extra_tokenizer_map or {}
-        self.system_prompt = []
-        self.loop = get_event_loop()
-
-    async def apply_chat_template(
+    async def ct_build_initial_tokens(
         self,
         messages: list[dict],
         tools: list[dict] | None = None,
         images: list[Any] | None = None,
         videos: list[Any] | None = None,
         audios: list[Any] | None = None,
-        mm_processor_kwargs: dict[str, Any] | None = None,
-        remove_system_prompt: bool = False,
     ) -> list[int]:
-        """Match H3's raw T2VA presentation with no special tokens."""
-        del tools, images, videos, audios, mm_processor_kwargs, remove_system_prompt
+        """Match H3's verbatim T2VA presentation with no special tokens."""
+        del tools, images, videos, audios
         text = messages_to_text(messages)
         prompt_length = self.rollout_config.prompt_length
         tokenized = await self.loop.run_in_executor(

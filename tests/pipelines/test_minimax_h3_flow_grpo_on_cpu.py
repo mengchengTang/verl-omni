@@ -13,6 +13,7 @@
 # limitations under the License.
 """CPU contract tests for MiniMax H3 FlowGRPO."""
 
+import asyncio
 from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -23,6 +24,7 @@ from tensordict import TensorDict
 from vllm_omni.diffusion.data import DiffusionOutput as VllmDiffusionOutput
 from vllm_omni.diffusion.models.minimax_h3 import MiniMaxH3Pipeline
 
+from verl_omni.pipelines.minimax_h3_flow_grpo.agent_loop import MiniMaxH3DiffusionSingleTurnAgentLoop
 from verl_omni.pipelines.minimax_h3_flow_grpo.common import (
     H3_AUDIO_WIDTH,
     H3_VIDEO_WIDTH,
@@ -82,6 +84,62 @@ def test_minimax_h3_flow_grpo_registers_both_adapters_and_joint_helpers() -> Non
         audio_weight=0.75,
     )
     torch.testing.assert_close(combined, torch.tensor([2.5]))
+
+
+def test_h3_agent_loop_uses_parent_init_and_raw_text_tokens() -> None:
+    class Tokenizer:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def encode(self, text, add_special_tokens=False):
+            assert text == "\n"
+            assert add_special_tokens is False
+            return [198]
+
+        def convert_tokens_to_ids(self, token):
+            assert token == "<|im_end|>"
+            return 151645
+
+        def apply_chat_template(self, *args, **kwargs):
+            raise AssertionError("H3 prompt encoding must not apply a chat template")
+
+        def __call__(self, text, **kwargs):
+            self.calls.append((text, kwargs))
+            return {"input_ids": [11, 12, 13]}
+
+    tokenizer = Tokenizer()
+    rollout = SimpleNamespace(prompt_length=128)
+    trainer_config = SimpleNamespace(config=SimpleNamespace(actor_rollout_ref=SimpleNamespace(rollout=rollout)))
+    processor = SimpleNamespace(image_processor=object())
+
+    async def initialize_and_build() -> tuple[MiniMaxH3DiffusionSingleTurnAgentLoop, list[int]]:
+        agent_loop = MiniMaxH3DiffusionSingleTurnAgentLoop(
+            trainer_config,
+            server_manager=object(),
+            tokenizer=tokenizer,
+            processor=processor,
+            dataset_cls=None,
+            data_config=SimpleNamespace(config={}),
+            hf_model_type="qwen3_vl",
+        )
+        prompt_ids = await agent_loop.ct_build_initial_tokens([{"role": "user", "content": "Raw H3 prompt"}])
+        return agent_loop, prompt_ids
+
+    agent_loop, prompt_ids = asyncio.run(initialize_and_build())
+    assert prompt_ids == [11, 12, 13]
+    assert agent_loop.continuous_token_builder is not None
+    assert agent_loop.extra_tokenizer_map == {}
+    assert tokenizer.calls == [
+        (
+            "Raw H3 prompt",
+            {
+                "padding": False,
+                "truncation": True,
+                "max_length": 128,
+                "add_special_tokens": False,
+            },
+        )
+    ]
 
 
 def test_rollout_output_reaches_actor_and_replays_joint_transition(monkeypatch) -> None:
