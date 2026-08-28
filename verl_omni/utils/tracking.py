@@ -168,14 +168,9 @@ def _export_video(
 def wrap_val_samples_for_wandb(samples, fps=24, output_dir=None):
     """Wrap validation samples and prepare top-level ``wandb`` video media.
 
-<<<<<<< HEAD
     Video outputs in ``[T, C, H, W]``, ``[C, T, H, W]``, or ``[T, H, W, C]``
     layouts are encoded to mp4 and passed to
     ``wandb.Video`` by path. Provide ``output_dir`` to keep the media available
-=======
-    Video outputs ``[T, C, H, W]`` or ``[C, T, H, W]`` are encoded to mp4 and
-    passed to ``wandb.Video`` by path. Provide ``output_dir`` to keep the media available
->>>>>>> 7804fcb (fix video save)
     for asynchronous upload; otherwise a temp dir is returned for cleanup.
     Optional tuple elements four and five carry audio and its sample rate. The
     table stores a stable media key because offline ``wandb`` tables do not

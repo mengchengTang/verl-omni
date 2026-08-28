@@ -71,6 +71,9 @@ def _lora_target_suffix(target: str) -> str | None:
     return next((suffix for suffix in H3_LORA_TARGETS if target == suffix or target.endswith("." + suffix)), None)
 
 
+# TODO: Remove this MiniMax H3-specific mapping once vLLM-Omni natively
+# supports syncing Diffusers full weights and LoRA updates into its fused
+# QKV/GEGLU inference layout.
 class MiniMaxH3WeightSyncMixin:
     """Translate Diffusers Actor weights before loading them into vLLM-Omni."""
 
