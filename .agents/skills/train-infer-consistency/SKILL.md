@@ -13,6 +13,12 @@ this skill connects their inputs and outputs without repeating their procedures.
 | Collect dumps | [verl-omni-msprobe-dump](https://gitcode.com/Ascend/msagent/tree/master/skills/accuracy/verl-omni-msprobe-dump) |
 | Analyze differences | [rl-consistency-analysis](https://gitcode.com/Ascend/msagent/tree/master/skills/accuracy/rl-consistency-analysis) |
 
+## Prerequisite — MSProbe
+
+MSProbe (`mindstudio-probe`) is required for data collection. If missing, identify
+the Python environment used for the user's verl-omni task and install it using
+that environment's package manager and workflow (e.g., uv or pip).
+
 ## Step 1 — Load the skills
 
 Prefer installed skills or an existing local msagent checkout. Read each
