@@ -19,6 +19,14 @@ MSProbe (`mindstudio-probe`) is required for data collection. If missing, identi
 the Python environment used for the user's verl-omni task and install it using
 that environment's package manager and workflow (e.g., uv or pip).
 
+## Step 0 — Screen a previous run, if provided
+
+If the user provides an experiment directory or logs, check the saved config for
+`calculate_log_probs=true` and inspect that run's `rollout_corr/*` metrics for
+initial evidence of differences. Record the source and affected steps/timesteps.
+Missing metrics or bypassed actor log-prob recomputation is inconclusive.
+Without previous artifacts, proceed directly to collection.
+
 ## Step 1 — Load the skills
 
 Prefer installed skills or an existing local msagent checkout. Read each
@@ -30,7 +38,10 @@ rather than reconstructing the procedure from memory.
 ## Step 2 — Collect paired dumps
 
 Follow the collection skill using the user's launch script and current verl-omni
-source. Produce the diagnostic wrapper, both dumps, and correlation logs.
+source. Collect full tensor data for both sides within the diagnostic window,
+using Step 0's findings, if available, to guide reproduction and fine-grained
+analysis. Establish sample pairing through correlation logs, not aggregate
+metrics. Produce the diagnostic wrapper, both dumps, and correlation logs.
 Existing artifacts may be reused after passing that skill's checks; if either
 side is missing, fix collection and rerun.
 
@@ -45,7 +56,8 @@ elementwise conclusions require tensor evidence.
 ## Step 4 — Deliver the report
 
 Provide actual paths to the diagnostic script, dumps, module mapping, and
-`output_5_root_cause_report.md`. Explain the pairing, evidence, limitations, and
+`output_5_root_cause_report.md`. Include the screening metrics and diagnostic
+config changes. Explain the pairing, evidence, limitations, and
 next steps. If execution is unavailable, complete the feasible integration work
 and identify unverified steps without claiming collection or analysis succeeded.
 
