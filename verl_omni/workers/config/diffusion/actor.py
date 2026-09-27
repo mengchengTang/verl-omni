@@ -26,6 +26,7 @@ from verl.workers.config.optimizer import OptimizerConfig
 from .model import DiffusionModelConfig
 
 __all__ = [
+    "DiffusionCheckpointConfig",
     "DiffusionLossConfig",
     "VeOmniDiffusionEngineConfig",
     "VeOmniDiffusionOptimizerConfig",
@@ -33,6 +34,26 @@ __all__ = [
     "FSDPDiffusionActorConfig",
     "VeOmniDiffusionActorConfig",
 ]
+
+
+@dataclass
+class DiffusionCheckpointConfig(CheckpointConfig):
+    """Training checkpoints and independently scheduled transformer adapter exports."""
+
+    # Export a transformer adapter separately from training checkpoints.
+    save_lora_adapter: bool = False
+    # Completed steps between exports; zero follows full-checkpoint saves.
+    save_lora_adapter_freq: int = 0
+    # Registered adapter to export, including frozen or inactive adapters.
+    lora_adapter_name: str = "default"
+
+    def __post_init__(self):
+        if isinstance(self.save_lora_adapter_freq, bool) or not isinstance(self.save_lora_adapter_freq, int):
+            raise ValueError("save_lora_adapter_freq must be a non-negative integer")
+        if self.save_lora_adapter_freq < 0:
+            raise ValueError("save_lora_adapter_freq must be a non-negative integer")
+        if not self.lora_adapter_name or self.lora_adapter_name == "reference":
+            raise ValueError("lora_adapter_name must name a registered PEFT adapter, not reference")
 
 
 @dataclass
@@ -153,7 +174,7 @@ class DiffusionActorConfig(BaseConfig):
     ppo_epochs: int = 1
     shuffle: bool = False
     data_loader_seed: int = 42
-    checkpoint: CheckpointConfig = field(default_factory=CheckpointConfig)
+    checkpoint: DiffusionCheckpointConfig = field(default_factory=DiffusionCheckpointConfig)
     optim: OptimizerConfig = field(default_factory=OptimizerConfig)
     engine: BaseConfig = field(default_factory=BaseConfig)
     rollout_n: int = MISSING  # must be override by sampling config

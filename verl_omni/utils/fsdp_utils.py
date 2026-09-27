@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "apply_fsdp2",
+    "collect_lora_adapter_params",
     "collect_lora_params",
     "export_fsdp_lora_adapter",
     "fsdp_summon_full_params",
@@ -175,6 +176,9 @@ def fsdp_summon_full_params(module, *, writeback: bool = False, with_grads: bool
 
 def _param_to_cpu(param):
     if hasattr(param, "full_tensor"):
+        mesh = getattr(param, "device_mesh", None)
+        if param.device.type == "cpu" and mesh is not None and mesh.device_type != "cpu":
+            param = param.to(mesh.device_type)
         return param.full_tensor().detach().cpu()
     return param.detach().cpu()
 
@@ -554,6 +558,17 @@ def _lora_params_by_name(module, adapter_name: str) -> OrderedDict:
 
 def _peft_or_named_lora(peft_model, adapter_name: str) -> OrderedDict:
     return _peft_lora_params_to_cpu(peft_model, adapter_name) or _lora_params_by_name(peft_model, adapter_name)
+
+
+def collect_lora_adapter_params(module, adapter_name: str = "default") -> OrderedDict:
+    """Collect the selected adapter, including LoRA layers outside transformer blocks.
+
+    FSDP1 uses full summon; FSDP2 materializes only selected adapter DTensors.
+    This path does not switch adapters or apply rollout key/layout conversions.
+    """
+    peft_model = getattr(module, "_fsdp_wrapped_module", module)
+    params = _collect_lora_params_non_layered(module, peft_model, adapter_name, base_sync_done=True)
+    return _clean_lora_param_names(params, adapter_name)
 
 
 def collect_lora_params(

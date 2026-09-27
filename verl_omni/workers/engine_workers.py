@@ -521,6 +521,11 @@ class TrainingWorker(Worker, DistProfilerExtension):
         return self.engine.save_checkpoint(local_path, hdfs_path, global_step, max_ckpt_to_keep)
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
+    def export_lora_adapter(self, local_path, global_step=0, adapter_name="default"):
+        """Delegate adapter export to the training engine."""
+        return self.engine.export_lora_adapter(local_path, global_step=global_step, adapter_name=adapter_name)
+
+    @register(dispatch_mode=Dispatch.ONE_TO_ALL)
     def load_checkpoint(self, local_path, hdfs_path=None, del_local_after_load=False):
         return self.engine.load_checkpoint(local_path, hdfs_path, del_local_after_load)
 
@@ -1045,6 +1050,12 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
     def save_checkpoint(self, local_path, hdfs_path=None, global_step=0, max_ckpt_to_keep=None):
         assert "actor" in self.role, "save_checkpoint only support actor role"
         self.actor.save_checkpoint(local_path, hdfs_path, global_step, max_ckpt_to_keep)
+
+    @register(dispatch_mode=Dispatch.ONE_TO_ALL)
+    def export_lora_adapter(self, local_path, global_step=0, adapter_name="default"):
+        """Dispatch a selected actor adapter export to all training ranks."""
+        assert "actor" in self.role, "export_lora_adapter only supports the actor role"
+        self.actor.export_lora_adapter(local_path, global_step=global_step, adapter_name=adapter_name)
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL, blocking=False)
     async def update_weights(self, global_steps: int = None, mode: str = "auto"):

@@ -108,13 +108,16 @@ actor_rollout_ref:
     shuffle: false
     data_loader_seed: 42
     checkpoint:
-      _target_: verl.trainer.config.CheckpointConfig
+      _target_: verl_omni.workers.config.diffusion.actor.DiffusionCheckpointConfig
       save_contents:
       - model
       - optimizer
       - extra
       load_contents: ${.save_contents}
       async_save: false
+      save_lora_adapter: false
+      save_lora_adapter_freq: 0
+      lora_adapter_name: default
     enable_timestep_staging: false
     use_no_sync_for_gradient_accumulation: false
     grad_clip: 1.0

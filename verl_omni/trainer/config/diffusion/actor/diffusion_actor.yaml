@@ -115,7 +115,7 @@ data_loader_seed: 42
 checkpoint:
 
   # Target dataclass for this configuration
-  _target_: verl.trainer.config.CheckpointConfig
+  _target_: verl_omni.workers.config.diffusion.actor.DiffusionCheckpointConfig
 
   # What to include in saved checkpoints
   save_contents: ['model', 'optimizer', 'extra']
@@ -126,6 +126,15 @@ checkpoint:
 
   # Whether to save checkpoints asynchronously. Only effective for Megatron as of now.
   async_save: False
+
+  # Export the selected transformer LoRA independently of training checkpoints.
+  save_lora_adapter: false
+
+  # Completed steps between exports; zero follows full-checkpoint saves.
+  save_lora_adapter_freq: 0
+
+  # Registered adapter to export, including when other adapters are active.
+  lora_adapter_name: default
 
 # optimizer configs
 optim:

@@ -79,6 +79,7 @@ from verl_omni.trainer.diffusion.diffusion_trainer_utils import (
     validate_distillation_config,
     worker_group_port_ranges,
 )
+from verl_omni.trainer.diffusion.lora_export import maybe_export_lora_adapter, validate_lora_export_config
 from verl_omni.trainer.diffusion.rollout_correction import (
     apply_bypass_mode_to_diffusion_batch,
     apply_rollout_correction_to_diffusion_batch,
@@ -408,6 +409,7 @@ class BaseRayDiffusionTrainer(ABC):
         self.tokenizer = tokenizer
         self.processor = processor
         self.config = config
+        validate_lora_export_config(config)
 
         self.separate = OmegaConf.select(config, "actor_rollout_ref.separate", default=False)
         self.hybrid_engine = config.actor_rollout_ref.hybrid_engine
@@ -1525,15 +1527,18 @@ class PolicyGradientRayTrainer(BaseRayDiffusionTrainer):
                     # 2. It's the last training step.
                     # 3. The current step number is a multiple of the save frequency.
                     # 4. The ESI(Elastic Server Instance)/training plan is close to expiration.
-                    if self.config.trainer.save_freq > 0 and (
+                    checkpoint_saved = self.config.trainer.save_freq > 0 and (
                         is_last_step
                         or self.global_steps % self.config.trainer.save_freq == 0
                         or esi_close_to_expiration
-                    ):
+                    )
+                    if checkpoint_saved:
                         if esi_close_to_expiration:
                             print("Force saving checkpoint: ESI instance expiration approaching.")
                         with marked_timer("save_checkpoint", timing_raw, color="green"):
                             self._save_checkpoint()
+
+                    maybe_export_lora_adapter(self, is_last_step=is_last_step, checkpoint_saved=checkpoint_saved)
 
                     # update weights from trainer to rollout
                     with marked_timer("update_weights", timing_raw, color="red"):
@@ -1928,15 +1933,18 @@ class DirectPreferenceRayTrainer(BaseRayDiffusionTrainer):
                     # 2. It's the last training step.
                     # 3. The current step number is a multiple of the save frequency.
                     # 4. The ESI(Elastic Server Instance)/training plan is close to expiration.
-                    if self.config.trainer.save_freq > 0 and (
+                    checkpoint_saved = self.config.trainer.save_freq > 0 and (
                         is_last_step
                         or self.global_steps % self.config.trainer.save_freq == 0
                         or esi_close_to_expiration
-                    ):
+                    )
+                    if checkpoint_saved:
                         if esi_close_to_expiration:
                             print("Force saving checkpoint: ESI instance expiration approaching.")
                         with marked_timer("save_checkpoint", timing_raw, color="green"):
                             self._save_checkpoint()
+
+                    maybe_export_lora_adapter(self, is_last_step=is_last_step, checkpoint_saved=checkpoint_saved)
 
                     # update weights from trainer to rollout
                     with marked_timer("update_weights", timing_raw, color="red"):

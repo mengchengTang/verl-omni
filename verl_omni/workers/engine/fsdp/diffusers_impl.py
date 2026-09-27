@@ -67,7 +67,13 @@ from verl_omni.pipelines.utils import (
     prepare_noisy_latents,
 )
 from verl_omni.utils.diffusion_compile import _maybe_compile_repeated_blocks
-from verl_omni.utils.fsdp_utils import apply_fsdp2, collect_lora_params
+from verl_omni.utils.fsdp_utils import apply_fsdp2, collect_lora_adapter_params, collect_lora_params
+from verl_omni.utils.lora_export import (
+    coordinated_export_phase,
+    inspect_lora_adapter,
+    prepare_adapter_tensors,
+    write_lora_adapter,
+)
 from verl_omni.workers.config import DiffusionModelConfig
 from verl_omni.workers.engine.lora_adapter_mixin import LoRAAdapterMixin
 
@@ -177,6 +183,11 @@ class DiffusersFSDPEngine(LoRAAdapterMixin, BaseEngine, ABC):
         """
         # This is used to import external_lib into the huggingface systems
         self._build_model_optimizer()
+
+        if self.checkpoint_config.get("save_lora_adapter", False):
+            coordinated_export_phase(
+                lambda: inspect_lora_adapter(self.module, self.checkpoint_config.lora_adapter_name)
+            )
 
         self.checkpoint_manager = FSDPCheckpointManager(
             model=self.module,
@@ -781,6 +792,49 @@ class DiffusersFSDPEngine(LoRAAdapterMixin, BaseEngine, ABC):
             offload_fsdp_model_to_cpu(self.module)
         gc.collect()
         aggressive_empty_cache(force_sync=True)
+
+    def export_lora_adapter(self, local_path, global_step=0, adapter_name="default", component="transformer"):
+        """Gather an unmerged transformer adapter on all ranks and publish on rank zero."""
+
+        def preflight():
+            config, expected = inspect_lora_adapter(self.module, adapter_name, component)
+            if self.rank == 0 and os.path.exists(local_path):
+                raise FileExistsError(f"Refusing to overwrite adapter export: {local_path}")
+            return config, expected
+
+        config, expected = coordinated_export_phase(preflight)
+        origin_device = next(self.module.parameters()).device.type
+        manual_load = origin_device == "cpu" and not self._uses_fsdp2_cpu_offload_policy
+        try:
+            coordinated_export_phase(lambda: load_fsdp_model_to_gpu(self.module) if manual_load else None)
+            tensors = coordinated_export_phase(
+                lambda: prepare_adapter_tensors(collect_lora_adapter_params(self.module, adapter_name), expected)
+            )
+            if self.rank != 0:
+                tensors.clear()
+
+            def publish():
+                if self.rank != 0:
+                    return
+                from verl_omni import __version__
+
+                base_model = self.model_config.path
+                config["base_model_name_or_path"] = base_model
+                config["inference_mode"] = True
+                metadata = {
+                    "format_version": 1,
+                    "global_step": global_step,
+                    "component": component,
+                    "adapter_name": adapter_name,
+                    "base_model_name_or_path": base_model,
+                    "weight_layout": "peft",
+                    "verl_omni_version": __version__,
+                }
+                write_lora_adapter(local_path, tensors, config, metadata)
+
+            coordinated_export_phase(publish)
+        finally:
+            coordinated_export_phase(lambda: offload_fsdp_model_to_cpu(self.module) if manual_load else None)
 
     def load_checkpoint(
         self, local_path: str, hdfs_path: Optional[str] = None, del_local_after_load: int = True, **kwargs

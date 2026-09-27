@@ -76,6 +76,7 @@ from verl_omni.trainer.diffusion.diffusion_trainer_utils import (
     validate_distillation_config,
     worker_group_port_ranges,
 )
+from verl_omni.trainer.diffusion.lora_export import maybe_export_lora_adapter, validate_lora_export_config
 from verl_omni.trainer.diffusion.ray_diffusion_trainer import (
     BaseRayDiffusionTrainer,
     _resolve_rollout_media_field,
@@ -168,6 +169,7 @@ class PolicyGradientDiffusionTrainerV1(ABC):
 
     def __init__(self, config):
         self.config = config
+        validate_lora_export_config(config)
         self.trainer_mode = config.trainer.v1.trainer_mode
         self.parameter_sync_step = config.trainer.v1.get(self.trainer_mode, {}).get("parameter_sync_step", 1)
         loss_mode = config.actor_rollout_ref.actor.diffusion_loss.loss_mode
@@ -279,11 +281,13 @@ class PolicyGradientDiffusionTrainerV1(ABC):
             with marked_timer("step", self.timing_raw):
                 self.on_step_begin()
                 batch = self.step(metrics, self.timing_raw)
-                if self.config.trainer.save_freq > 0 and (
+                checkpoint_saved = self.config.trainer.save_freq > 0 and (
                     is_last_step or self.global_steps % self.config.trainer.save_freq == 0
-                ):
+                )
+                if checkpoint_saved:
                     with marked_timer("save_checkpoint", self.timing_raw, color="green"):
                         self._save_checkpoint()
+                maybe_export_lora_adapter(self, is_last_step=is_last_step, checkpoint_saved=checkpoint_saved)
                 self.on_step_end()
                 metrics.update(self._consume_sync_metrics())
 
