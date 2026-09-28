@@ -638,3 +638,27 @@ def test_duplicate_json_keys_fail(tmp_path):
     path.write_text('{"world_size": 1, "world_size": 2}')
     with pytest.raises(ValueError, match="Duplicate"):
         utils.read_json(path)
+
+
+def test_full_lora_checkpoint_exports_pipeline_and_adapter(case):
+    from peft import LoraConfig, PeftModel
+
+    config, base_state, original = case
+    original.add_adapter(LoraConfig(r=2, lora_alpha=4, target_modules=["to_q", "to_v"]))
+    with torch.no_grad():
+        for name, parameter in original.named_parameters():
+            if "lora_B" in name:
+                parameter.normal_()
+    source = Path(config.local_dir)
+    torch.save(original.state_dict(), source / "model_world_size_1_rank_0.pt")
+    utils.write_json(source / "lora_train_meta.json", {"r": 2, "lora_alpha": 4, "task_type": "CAUSAL_LM"})
+    result = merge_model(config)
+    validate_artifact(result.output_dir)
+    adapter = result.output_dir / "lora_adapter"
+    validate_artifact(adapter)
+    pipeline = QwenImagePipeline.from_pretrained(result.output_dir, local_files_only=True)
+    for key, value in pipeline.transformer.state_dict().items():
+        torch.testing.assert_close(value, base_state[key], rtol=0, atol=0)
+    restored = PeftModel.from_pretrained(pipeline.transformer, adapter)
+    with torch.no_grad():
+        torch.testing.assert_close(_forward(restored), _forward(original), rtol=1e-6, atol=1e-6)
