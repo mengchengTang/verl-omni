@@ -249,6 +249,8 @@ def _discover_fsdp_rank_paths(input_dir: Path, world_size: int) -> list[Path]:
 def _merge_fsdp_lora_tensors(
     rank_paths: list[Path], adapter_name: str = "default"
 ) -> tuple[OrderedDict[str, torch.Tensor], list[str]]:
+    from verl_omni.model_merger.fsdp_model_merger import reconstruct_tensor
+
     print(f"Loading rank 0/{len(rank_paths) - 1}: {rank_paths[0].name}")
     rank0_state = torch.load(rank_paths[0], map_location="cpu", weights_only=False, mmap=True)
     lora_keys = sorted(key for key in rank0_state if _lora_checkpoint_key(key, adapter_name) is not None)
@@ -256,31 +258,26 @@ def _merge_fsdp_lora_tensors(
         raise ValueError(f"No LoRA weights for adapter {adapter_name!r} in {rank_paths[0]}")
 
     print(f"Found {len(lora_keys)} LoRA tensors")
-    lora_shards = {key: [_local_tensor(rank0_state[key])] for key in lora_keys}
-    placements = {key: getattr(rank0_state[key], "placements", None) for key in lora_keys}
+    lora_shards = {key: [rank0_state[key]] for key in lora_keys}
     del rank0_state
 
     for rank, rank_path in enumerate(rank_paths[1:], start=1):
         print(f"Loading rank {rank}/{len(rank_paths) - 1}: {rank_path.name}")
         rank_state = torch.load(rank_path, map_location="cpu", weights_only=False, mmap=True)
         for key in lora_keys:
-            lora_shards[key].append(_local_tensor(rank_state[key]))
+            lora_shards[key].append(rank_state[key])
         del rank_state
 
     lora_params = OrderedDict()
     target_modules = set()
     for key in lora_keys:
-        placement = placements[key]
-        if placement is not None and len(placement) == 1 and placement[0].is_shard():
-            merged = torch.cat(lora_shards[key], dim=placement[0].dim).contiguous()
-        else:
-            # Plain tensors and replicated DTensors already contain the full weight.
-            merged = lora_shards[key][0].contiguous()
+        shards = lora_shards.pop(key)
+        merged = reconstruct_tensor(shards, tuple(shards[0].shape))
 
         peft_key = _to_peft_lora_key(key, adapter_name)
         module_key = peft_key.rsplit(".lora_", maxsplit=1)[0]
         target_parts = [part for part in module_key.split(".") if part != "base_layer"]
-        target_module = target_parts[-1]
+        target_module = ".".join(target_parts[-2:]) if target_parts[-1].isdigit() else target_parts[-1]
         lora_params[peft_key] = merged
         target_modules.add(target_module)
 

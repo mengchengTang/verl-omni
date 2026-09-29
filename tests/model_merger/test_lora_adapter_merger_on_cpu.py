@@ -29,7 +29,6 @@ from diffusers import QwenImageTransformer2DModel
 from hydra import compose, initialize_config_dir
 from peft import LoraConfig, PeftModel
 from safetensors.torch import load_file
-from torch.distributed.tensor import Replicate, Shard
 
 
 @pytest.fixture
@@ -70,7 +69,7 @@ def case(tmp_path):
     base.save_pretrained(base_dir)
     base.save_config(source / "huggingface")
     model = deepcopy(base)
-    config = LoraConfig(r=2, lora_alpha=4, target_modules=["to_q", "to_v"])
+    config = LoraConfig(r=2, lora_alpha=4, target_modules=["to_q", "to_v", "to_out.0"])
     model.add_adapter(config, adapter_name="default")
     model.add_adapter(deepcopy(config), adapter_name="old")
     with torch.no_grad():
@@ -125,6 +124,7 @@ def test_cli_auto_export_and_reload(api, case, monkeypatch, capsys, adapter_name
     assert result["output_dir"] == str(case.target if full_checkpoint else adapter_dir)
     config = json.loads((adapter_dir / "adapter_config.json").read_text())
     assert config["task_type"] is None
+    assert set(config["target_modules"]) == {"to_q", "to_v", "to_out.0"}
     assert (config["r"], config["lora_alpha"]) == (2, 4)
     weights = load_file(adapter_dir / "adapter_model.safetensors")
     assert set(weights) == {
@@ -181,9 +181,9 @@ def test_lora_checkpoint_config_override(overrides, expected):
     assert config.actor_rollout_ref.actor.checkpoint.save_lora_only is expected
 
 
-@pytest.mark.parametrize("placement", [None, Shard(0), Shard(1), Replicate()])
 @pytest.mark.parametrize("normalized", [False, True])
-def test_legacy_export_keeps_metadata_configuration(api, case, placement, normalized):
+@pytest.mark.parametrize("replica_delta", [0, 1])
+def test_legacy_export_keeps_metadata_configuration(api, case, normalized, replica_delta):
     expected = {
         "base_model.model." + key.replace(".default.weight", ".weight"): value
         for key, value in case.state.items()
@@ -198,12 +198,13 @@ def test_legacy_export_keeps_metadata_configuration(api, case, placement, normal
                 continue
             key = key.replace(".default.weight", ".weight") if normalized else key
             key = "_fsdp_wrapped_module." + key.replace(".lora_", "._fsdp_wrapped_module.lora_")
-            if placement is not None:
-                local = value.chunk(2, dim=placement.dim)[rank] if placement.is_shard() else value
-                # Model the checkpoint's local tensor and placement without a process group.
-                value = SimpleNamespace(_local_tensor=local, placements=(placement,))
-            state[key] = value
+            state[key] = value + rank * replica_delta
         torch.save(state, case.source / f"model_world_size_2_rank_{rank}.pt")
+    if replica_delta:
+        with pytest.raises(ValueError, match="replicas disagree"):
+            api.export_fsdp_lora_adapter(case.source, case.target, "original/base")
+        assert not case.target.exists()
+        return
     summary = api.export_fsdp_lora_adapter(case.source, case.target, "original/base")
     assert summary["world_size"] == 2
     config = json.loads((case.target / "adapter_config.json").read_text())
