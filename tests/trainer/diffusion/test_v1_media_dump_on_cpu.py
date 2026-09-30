@@ -246,8 +246,9 @@ def test_v0_rollout_dump_rejects_conflicting_tool_media(key, tool_value):
 @pytest.mark.parametrize("trainer_cls", [ray_diffusion_trainer.BaseRayDiffusionTrainer, _ConcreteTrainer])
 @pytest.mark.parametrize("failure", ["media", "table"])
 def test_validation_logger_failures_are_best_effort(monkeypatch, tmp_path, caplog, trainer_cls, failure):
-    import verl_omni.utils.tracking as tracking
     import wandb
+
+    import verl_omni.utils.tracking as tracking
 
     caplog.set_level(logging.WARNING, logger=ray_diffusion_trainer.sys_logger.name)
     trainer = SimpleNamespace(global_steps=7)
