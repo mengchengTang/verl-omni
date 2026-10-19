@@ -6,7 +6,7 @@ ENV SOC_VERSION=ascend910b1
 FROM quay.io/ascend/cann:9.1.0-a3-ubuntu22.04-py3.12 AS base-a3
 ENV SOC_VERSION=ascend910_9391
 
-FROM swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:9.1.0-950-ubuntu22.04-py3.12 AS base-a5
+FROM quay.io/ascend/cann:9.1.0-950-ubuntu22.04-py3.12 AS base-a5
 ENV SOC_VERSION=ascend950dt_9582
 
 FROM base-${NPU_DEVICE} AS runtime
